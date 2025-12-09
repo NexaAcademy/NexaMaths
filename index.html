@@ -776,28 +776,59 @@
       };
 
       // Send request
-      fetch(WEBAPP_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(response => response.json())
-      .then(res => {
-        if (res && res.status === 'success') {
-          sendStatus.innerHTML = '<span class="success">✔ ප්‍රතිඵල සාර්ථකව සුරකින ලදී.</span>';
-        } else {
-          sendStatus.innerHTML = '<span class="error">ප්‍රතිඵල සුරකින්න ප්‍රශ්නයක් ඇත.</span>';
-          console.error('Save response', res);
-        }
-      })
-      .catch(err => {
-        sendStatus.innerHTML = '<span class="error">ප්‍රතිඵල යැවීමට අසමත් විය.</span>';
-        console.error('Error sending to WEBAPP_URL:', err);
-      });
-    });
-
+     // Send request with better error handling
+fetch(WEBAPP_URL, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  mode: 'no-cors', // CORS දෝෂ වලට මෙය උපකාරී වේ
+  body: JSON.stringify(payload)
+})
+.then(async response => {
+  // First, try to get the response as text to see what we're getting
+  const responseText = await response.text();
+  console.log('Raw response:', responseText);
+  
+  // Try to parse as JSON
+  try {
+    const data = JSON.parse(responseText);
+    return data;
+  } catch (e) {
+    // If not JSON, check if it's HTML
+    if (responseText.includes('<html') || responseText.includes('<!DOCTYPE')) {
+      throw new Error('Server returned HTML instead of JSON. Please check your Google Apps Script deployment.');
+    } else {
+      throw new Error('Invalid JSON response: ' + responseText.substring(0, 100));
+    }
+  }
+})
+.then(res => {
+  console.log('Parsed response:', res);
+  
+  if (res && res.status === 'success') {
+    sendStatus.innerHTML = '<span class="success">✔ ප්‍රතිඵල සාර්ථකව සුරකින ලදී.</span>';
+  } else {
+    sendStatus.innerHTML = `<span class="error">ප්‍රතිඵල සුරකින්න ප්‍රශ්නයක් ඇත: ${res?.message || 'Unknown error'}</span>`;
+  }
+})
+.catch(err => {
+  console.error('Fetch error:', err);
+  
+  // More detailed error message
+  let errorMsg = err.message || 'ප්‍රතිඵල යැවීමට අසමත් විය.';
+  
+  // Check specific error types
+  if (err.message.includes('Failed to fetch')) {
+    errorMsg = 'සර්වරය සමඟ සම්බන්ධ වීමට අපොහොසත් විය. කරුණාකර අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.';
+  } else if (err.message.includes('HTML instead of JSON')) {
+    errorMsg = 'සර්වරය වැරදි ප්‍රතිචාරයක් ලබා දෙයි. කරුණාකර Google Apps Script deployment පරීක්ෂා කරන්න.';
+  } else if (err.message.includes('CORS')) {
+    errorMsg = 'CORS දෝෂයකි. කරුණාකර විකල්පකයෙන් සම්බන්ධ වන්න.';
+  }
+  
+  sendStatus.innerHTML = `<span class="error">${errorMsg}<br>Error details: ${err.message}</span>`;
+});
     // Escape HTML to avoid injection
     function escapeHtml(str) {
       return String(str).replace(/[&<>"'`=\/]/g, function(s) {
@@ -827,5 +858,6 @@
 </body>
 
 </html>
+
 
 
